@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>Celery Result</title>
+</head>
+<body>
+    <button onclick="submitTask()">开始执行任务</button>
+
+    <p>Task ID: <span id="taskIdDisplay">尚未提交</span></p>
+    <p>AJAX 状态: <span id="statusDisplay">等待提交</span></p>
+
+    <script>
+        function submitTask() {
+            const taskIdSpan = document.getElementById("taskIdDisplay");
+            const statusSpan = document.getElementById("statusDisplay");
+
+            statusSpan.innerText = "提交中...";
+
+            // 1. 发起请求获取 task_id
+            fetch('/api/celery_submit_task/')
+                .then(res => res.json())
+                .then(data => {
+                    const taskId = data.task_id;
+                    taskIdSpan.innerText = taskId;
+                    statusSpan.innerText = "任务已提交，等待结果...";
+
+                    // 2. 每 1.5 秒查询任务执行状态：请求接口 /api/celery_task_status
+                    const timer = setInterval(() => {
+                        fetch(`/api/celery_task_status/?task_id=${taskId}`)
+                            .then(res => res.json())
+                            // 定义变量resData，接受从后端返回的数据
+                            .then(resData => {
+                                // 任务未完成之前，state是PENING
+                                const state = resData.data.state;
+                                if (state === 'SUCCESS') {
+                                    clearInterval(timer); // 成功，停止轮询
+                                    statusSpan.innerText = "计算完成！结果是: " + resData.data.result;
+                                } else if (state === 'FAILURE') {
+                                    clearInterval(timer); // 失败，停止轮询
+                                    statusSpan.innerText = "执行失败: " + resData.data.error;
+                                } else {
+                                    statusSpan.innerText = "执行中，当前状态: " + state;
+                                }
+                            });
+                    }, 1500);
+                });
+        }
+    </script>
+</body>
+</html>
